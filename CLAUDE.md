@@ -15,6 +15,19 @@ go build -o lazyprj .
 go mod tidy
 ```
 
+## ブランチ戦略
+
+GitHub Flow を採用。`main` への直pushは禁止（ブランチ保護設定済み）。
+
+```bash
+git switch -c feature/xxx
+# 実装後
+git push origin feature/xxx
+gh pr create
+gh pr merge --delete-branch
+git switch main && git pull
+```
+
 ## アーキテクチャ概要
 
 tmuxセッションをTUIで管理するGoアプリケーション。[Bubble Tea](https://github.com/charmbracelet/bubbletea) の Model-Update-View パターンで実装されている。
@@ -26,18 +39,18 @@ tmuxセッションをTUIで管理するGoアプリケーション。[Bubble Tea
 - `screenMain` → `App`（メイン画面、プロジェクト一覧＋詳細）
 - `screenEditor` → `EditorModel`（ウィンドウ・ペイン編集）
 - `screenScan` → `ScanModel`（未登録プロジェクトのスキャン）
+- `screenSetup` → `SetupModel`（スキャンディレクトリ設定、初回起動時に自動遷移）
+- `screenQuickstart` → `QuickstartModel`（新規セッション作成）
 
 ### アタッチの遅延実行
 
 tmuxのアタッチは `tea.Quit` 後に実行する必要があるため、`App.pendingAttach` にセッション名を保存し、`main.go` で `p.Run()` の戻り値から `PendingAttach()` を呼び出して実行する。
 
-### 設定ファイルの優先順位
+### 設定ファイル
 
-`internal/config/config.go` の `GetConfigPath()` が `config/personal.json` → `config/default.json` の順で参照する。保存は常に `personal.json` に行われる。
+`internal/config/config.go` の `GetConfigPath()` が `~/.config/lazyprj/config.json` を返す。`XDG_CONFIG_HOME` が設定されている場合は `$XDG_CONFIG_HOME/lazyprj/config.json` を使用。保存も同パスに行われる。
 
-### リポジトリルートの検出
-
-`main.go` の `findRepoRoot()` が `config/` ディレクトリと `start-projects.sh` の両方が存在するディレクトリを上向きに探索してリポジトリルートとする。
+初回起動時（ファイルが存在しない場合）は `ScanDirectory` が空の `Config` を返し、`app.go` が `screenSetup` へ自動遷移する。
 
 ### モジュール構成
 
