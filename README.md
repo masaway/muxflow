@@ -20,6 +20,18 @@ Go製のターミナルUI（TUI）で、tmuxセッションを対話的に管理
 
 ## インストール
 
+### 前提条件
+
+**tmux** が必要です。先にインストールしてください。
+
+```bash
+# Ubuntu / Debian
+sudo apt install tmux
+
+# macOS (Homebrew)
+brew install tmux
+```
+
 ### バイナリをダウンロード（推奨）
 
 [GitHub Releases](https://github.com/masaway/lazyprj/releases/latest) からプラットフォームに合ったアーカイブをダウンロードして展開します。
@@ -54,7 +66,9 @@ mv lazyprj /usr/local/bin/
 
 **Windows (amd64)**
 
-[Releases ページ](https://github.com/masaway/lazyprj/releases/latest) から `lazyprj_windows_amd64.zip` をダウンロードして展開し、PATHの通った場所に配置してください。
+> Windows では tmux が使えないため、**WSL（Windows Subsystem for Linux）** 上での利用を推奨します。WSL 内では上記の Linux 手順でインストールしてください。
+>
+> ネイティブ環境で使う場合は `lazyprj_windows_amd64.zip` を展開し、`lazyprj.exe` を任意のフォルダ（例: `C:\Users\<ユーザー名>\bin`）に置いて、そのフォルダを「システム環境変数 PATH」に追加してください。
 
 ### go install
 
@@ -74,8 +88,7 @@ mv lazyprj ~/.local/bin/
 
 ### 依存関係
 
-- tmux（バイナリインストールの場合はGoは不要）
-- Go 1.24.2 以上（`go install` またはソースビルドの場合）
+- Go 1.24.2 以上（`go install` またはソースビルドの場合のみ）
 
 ---
 
