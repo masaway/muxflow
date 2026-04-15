@@ -20,13 +20,13 @@ Go製のターミナルUI（TUI）で、tmuxセッションを対話的に管理
 ## インストール
 
 ```bash
-go install github.com/yourname/lazyprj@latest
+go install github.com/masaway/lazyprj@latest
 ```
 
 またはソースからビルド：
 
 ```bash
-git clone https://github.com/yourname/lazyprj
+git clone https://github.com/masaway/lazyprj
 cd lazyprj
 go build -o lazyprj .
 # PATHの通った場所に移動（例）
