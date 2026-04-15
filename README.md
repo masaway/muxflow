@@ -20,11 +20,49 @@ Go製のターミナルUI（TUI）で、tmuxセッションを対話的に管理
 
 ## インストール
 
+### バイナリをダウンロード（推奨）
+
+[GitHub Releases](https://github.com/masaway/lazyprj/releases/latest) からプラットフォームに合ったアーカイブをダウンロードして展開します。
+
+**Linux (amd64)**
+
+```bash
+curl -L https://github.com/masaway/lazyprj/releases/latest/download/lazyprj_linux_amd64.tar.gz | tar xz
+mv lazyprj ~/.local/bin/
+```
+
+**Linux (arm64)**
+
+```bash
+curl -L https://github.com/masaway/lazyprj/releases/latest/download/lazyprj_linux_arm64.tar.gz | tar xz
+mv lazyprj ~/.local/bin/
+```
+
+**macOS (Apple Silicon)**
+
+```bash
+curl -L https://github.com/masaway/lazyprj/releases/latest/download/lazyprj_darwin_arm64.tar.gz | tar xz
+mv lazyprj /usr/local/bin/
+```
+
+**macOS (Intel)**
+
+```bash
+curl -L https://github.com/masaway/lazyprj/releases/latest/download/lazyprj_darwin_amd64.tar.gz | tar xz
+mv lazyprj /usr/local/bin/
+```
+
+**Windows (amd64)**
+
+[Releases ページ](https://github.com/masaway/lazyprj/releases/latest) から `lazyprj_windows_amd64.zip` をダウンロードして展開し、PATHの通った場所に配置してください。
+
+### go install
+
 ```bash
 go install github.com/masaway/lazyprj@latest
 ```
 
-またはソースからビルド：
+### ソースからビルド
 
 ```bash
 git clone https://github.com/masaway/lazyprj
@@ -36,8 +74,8 @@ mv lazyprj ~/.local/bin/
 
 ### 依存関係
 
-- Go 1.24.2 以上
-- tmux
+- tmux（バイナリインストールの場合はGoは不要）
+- Go 1.24.2 以上（`go install` またはソースビルドの場合）
 
 ---
 
