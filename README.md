@@ -1,5 +1,7 @@
 # lazyprj
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 tmuxセッションをTUIで管理するツールです。プロジェクト一覧からセッションを起動・アタッチしたり、PC再起動後にまとめて自動起動したりできます。
 
 [Bubble Tea](https://github.com/charmbracelet/bubbletea) + [lipgloss](https://github.com/charmbracelet/lipgloss) で実装されています。
@@ -163,3 +165,13 @@ OFF にしておくと「コマンドは出てくるが Enter は自分で押す
 
 - [キーバインド一覧](documents/keybindings.md)
 - [設定ファイル](documents/configuration.md)
+
+---
+
+## Contributing
+
+バグ報告・機能提案・PRはいつでも歓迎です。詳しくは [CONTRIBUTING.md](CONTRIBUTING.md) をご覧ください。
+
+## License
+
+[MIT](LICENSE)
