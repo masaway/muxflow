@@ -91,9 +91,22 @@ func configDir() string {
 	return filepath.Join(home, ".config", "lazyprj")
 }
 
-// GetConfigPath は設定ファイルのパスを返す
+var configSocket string
+
+// SetSocket はソケット名を設定する。空でない場合、config ファイル名が
+// config-<socket>.json になる。
+func SetSocket(s string) {
+	configSocket = s
+}
+
+// GetConfigPath は設定ファイルのパスを返す。
+// ソケット名が指定されている場合は config-<socket>.json を使用する。
 func GetConfigPath() string {
-	return filepath.Join(configDir(), "config.json")
+	name := "config.json"
+	if configSocket != "" {
+		name = "config-" + configSocket + ".json"
+	}
+	return filepath.Join(configDir(), name)
 }
 
 // Load は設定ファイルを読み込む

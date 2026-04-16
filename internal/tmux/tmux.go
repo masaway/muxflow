@@ -10,8 +10,24 @@ import (
 	"github.com/masaway/lazyprj/internal/config"
 )
 
+var socket string
+
+// SetSocket は使用する tmux ソケット名を設定する（例: "lazyprj-demo"）。
+// 空文字の場合はデフォルトソケットを使用する。
+func SetSocket(s string) {
+	socket = s
+}
+
+// socketArgs は tmux コマンドに -L <socket> を付加するための引数を返す
+func socketArgs(args []string) []string {
+	if socket == "" {
+		return args
+	}
+	return append([]string{"-L", socket}, args...)
+}
+
 func run(args ...string) (int, string) {
-	cmd := exec.Command("tmux", args...)
+	cmd := exec.Command("tmux", socketArgs(args)...)
 	out, _ := cmd.CombinedOutput()
 	err := cmd.Wait()
 	if err != nil {
@@ -24,7 +40,7 @@ func run(args ...string) (int, string) {
 }
 
 func runCmd(args ...string) (int, string) {
-	cmd := exec.Command("tmux", args...)
+	cmd := exec.Command("tmux", socketArgs(args)...)
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -205,9 +221,9 @@ func InspectSession(name string) []config.Window {
 // AttachOrSwitch はtmux内ならswitch-client、外ならattach-sessionを実行する
 func AttachOrSwitch(name string) error {
 	if os.Getenv("TMUX") != "" {
-		return exec.Command("tmux", "switch-client", "-t", name).Run()
+		return exec.Command("tmux", socketArgs([]string{"switch-client", "-t", name})...).Run()
 	}
-	cmd := exec.Command("tmux", "attach-session", "-t", name)
+	cmd := exec.Command("tmux", socketArgs([]string{"attach-session", "-t", name})...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

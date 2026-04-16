@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -17,6 +18,7 @@ type SetupModel struct {
 	cfg           *config.Config
 	canSkip       bool // 既存の値があればEscでスキップ可
 	done          bool
+	skipped       bool // Escで設定せずに閉じた
 	status        string
 	statusIsErr   bool
 }
@@ -32,6 +34,8 @@ func NewSetup(cfg *config.Config) *SetupModel {
 	canSkip := cfg.Settings.ScanDirectory != ""
 	if canSkip {
 		ti.SetValue(cfg.Settings.ScanDirectory)
+	} else if cwd, err := os.Getwd(); err == nil {
+		ti.SetValue(cwd)
 	}
 	ti.Focus()
 
@@ -44,7 +48,8 @@ func NewSetup(cfg *config.Config) *SetupModel {
 
 func (m *SetupModel) Init() tea.Cmd { return textinput.Blink }
 
-func (m *SetupModel) IsDone() bool { return m.done }
+func (m *SetupModel) IsDone() bool    { return m.done }
+func (m *SetupModel) IsSkipped() bool { return m.skipped }
 
 func (m *SetupModel) Resize(w, h int) {
 	m.width = w
@@ -81,10 +86,12 @@ func (m *SetupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "esc":
-			if m.canSkip {
-				m.done = true
-			}
+			m.done = true
+			m.skipped = !m.canSkip // 既存値なしでスキップした場合はフラグを立てる
 			return m, nil
+
+		case "ctrl+c", "q":
+			return m, tea.Quit
 		}
 	}
 
@@ -133,9 +140,9 @@ func (m *SetupModel) View() string {
 func (m *SetupModel) renderKeys() string {
 	var hints []struct{ key, desc string }
 	if m.canSkip {
-		hints = []struct{ key, desc string }{{"Enter", "保存"}, {"Esc", "キャンセル"}}
+		hints = []struct{ key, desc string }{{"Enter", "保存"}, {"Esc", "キャンセル"}, {"q", "終了"}}
 	} else {
-		hints = []struct{ key, desc string }{{"Enter", "保存"}}
+		hints = []struct{ key, desc string }{{"Enter", "保存"}, {"Esc", "後で設定"}, {"q", "終了"}}
 	}
 	var parts []string
 	for _, h := range hints {

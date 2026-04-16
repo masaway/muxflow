@@ -306,8 +306,14 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			result, cmd := m.setup.Update(msg)
 			m.setup = result.(*SetupModel)
 			if m.setup.IsDone() {
+				skipped := m.setup.IsSkipped()
 				m.currentScreen = screenMain
 				m.setup = nil
+				if skipped {
+					// スキップ時はリロードしない（再度reloadedMsgが来ないのでsetup画面も出ない）
+					// 次回起動時はScanDirectoryが空なので再度setup画面に遷移する
+					return m, nil
+				}
 				return m, reloadCmd
 			}
 			return m, cmd

@@ -1,16 +1,27 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/masaway/lazyprj/internal/config"
 	"github.com/masaway/lazyprj/internal/tmux"
 	"github.com/masaway/lazyprj/internal/ui"
 )
 
 func main() {
+	var socketName string
+	flag.StringVar(&socketName, "L", "", "使用する tmux ソケット名（例: lazyprj-demo）")
+	flag.Parse()
+
+	if socketName != "" {
+		tmux.SetSocket(socketName)
+		config.SetSocket(socketName)
+	}
+
 	app := ui.New()
 
 	p := tea.NewProgram(
