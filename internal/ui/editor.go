@@ -60,9 +60,10 @@ type EditorModel struct {
 	paneForm paneFormState
 	winForm  windowFormState
 
-	status     string
+	status      string
 	statusIsErr bool
-	done       bool
+	done        bool
+	showHelp    bool
 }
 
 type paneFormState struct {
@@ -233,7 +234,7 @@ func (m *EditorModel) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.formMode = editorFormNone
 			return m, nil
 
-		case "enter", "w":
+		case "enter", "w", "ctrl+s":
 			// テキスト入力フォーカス中は w をそのままテキスト入力に渡す
 			if key.String() == "w" {
 				if m.formMode == editorFormPane && (m.paneForm.dirInputMode || m.paneForm.focus == 1) {
@@ -425,11 +426,22 @@ func (m *EditorModel) commitWindowForm() (tea.Model, tea.Cmd) {
 }
 
 func (m *EditorModel) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.showHelp {
+		switch key.String() {
+		case "?", "esc", "q":
+			m.showHelp = false
+		}
+		return m, nil
+	}
+
 	switch key.String() {
+	case "?":
+		m.showHelp = true
+
 	case "esc":
 		m.done = true
 
-	case "w":
+	case "w", "ctrl+s":
 		return m, m.saveCmd()
 
 	case "tab":
@@ -438,6 +450,12 @@ func (m *EditorModel) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		} else {
 			m.panel = editorPanelWindows
 		}
+
+	case "h":
+		m.panel = editorPanelWindows
+
+	case "l":
+		m.panel = editorPanelPanes
 
 	case "1":
 		m.panel = editorPanelWindows
@@ -609,6 +627,10 @@ func (m *EditorModel) View() string {
 		return overlayCenter(dialog, box, dialogW, dialogH)
 	}
 
+	if m.showHelp {
+		return overlayCenter(dialog, m.renderEditorHelp(), dialogW, dialogH)
+	}
+
 	return dialog
 }
 
@@ -651,7 +673,7 @@ func (m *EditorModel) renderEditorKeyHints(width int) string {
 	type hint struct{ key, desc string }
 	hints := []hint{
 		{"a", "追加"}, {"e", "編集"}, {"d", "削除"},
-		{"Tab", "切替"}, {"Esc", "戻る"},
+		{"Tab", "切替"}, {"?", "ヘルプ"}, {"Esc", "戻る"},
 	}
 	var parts []string
 	for _, h := range hints {
@@ -1241,4 +1263,115 @@ func (m *EditorModel) renderWindowFormBox() string {
 		Padding(1, 2).
 		Width(w).
 		Render(sb.String())
+}
+
+func (m *EditorModel) renderEditorHelp() string {
+	type entry struct{ key, desc string }
+	type section struct {
+		title   string
+		entries []entry
+	}
+	sections := []section{
+		{"ナビゲーション", []entry{
+			{"j / k", "上 / 下移動"},
+			{"h / l", "左 / 右パネル移動"},
+			{"Tab", "パネル切替"},
+			{"1 / 2", "パネル直接指定"},
+		}},
+		{"操作", []entry{
+			{"a", "追加"},
+			{"e", "編集"},
+			{"d", "削除"},
+			{"w / Ctrl+S", "保存"},
+		}},
+		{"フォーム内", []entry{
+			{"Tab / Shift+Tab", "フィールド移動"},
+			{"e", "ディレクトリ入力モード"},
+			{"h / l", "レイアウト選択"},
+			{"Space", "Execute トグル"},
+			{"Enter", "確定"},
+			{"Esc", "キャンセル"},
+		}},
+		{"その他", []entry{
+			{"?", "ヘルプ"},
+			{"Esc", "エディタを閉じる"},
+		}},
+	}
+
+	const keyW = 16
+	keyStyle := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Width(keyW)
+	descStyle := lipgloss.NewStyle().Foreground(colorFg)
+	secTitleStyle := lipgloss.NewStyle().Foreground(colorPurple).Bold(true)
+	bdrStyle := lipgloss.NewStyle().Foreground(colorBorder)
+	dimStyle := lipgloss.NewStyle().Foreground(colorFgDim)
+
+	colContentW := 36
+	pad := 2
+	colStyle := lipgloss.NewStyle().Width(colContentW+pad*2).Padding(1, pad)
+	descMaxW := colContentW - keyW - 1
+	descIndent := strings.Repeat(" ", keyW+1)
+
+	wrapDesc := func(text string) string {
+		if runewidth.StringWidth(text) <= descMaxW {
+			return text
+		}
+		var lines []string
+		var cur strings.Builder
+		curW := 0
+		for _, r := range text {
+			rw := runewidth.RuneWidth(r)
+			if curW+rw > descMaxW && cur.Len() > 0 {
+				lines = append(lines, cur.String())
+				cur.Reset()
+				curW = 0
+			}
+			cur.WriteRune(r)
+			curW += rw
+		}
+		if cur.Len() > 0 {
+			lines = append(lines, cur.String())
+		}
+		return strings.Join(lines, "\n"+descIndent)
+	}
+
+	renderSection := func(sec section) string {
+		lines := []string{
+			secTitleStyle.Render(sec.title),
+			bdrStyle.Render(strings.Repeat("─", colContentW)),
+		}
+		for _, e := range sec.entries {
+			lines = append(lines, keyStyle.Render(e.key)+" "+descStyle.Render(wrapDesc(e.desc)))
+		}
+		return strings.Join(lines, "\n")
+	}
+
+	leftBlock := colStyle.Render(lipgloss.JoinVertical(lipgloss.Left,
+		renderSection(sections[0]), "", renderSection(sections[3]),
+	))
+	rightBlock := colStyle.Render(lipgloss.JoinVertical(lipgloss.Left,
+		renderSection(sections[1]), "", renderSection(sections[2]),
+	))
+
+	colH := lipgloss.Height(leftBlock)
+	if rh := lipgloss.Height(rightBlock); rh > colH {
+		colH = rh
+	}
+	divLines := make([]string, colH)
+	for i := range divLines {
+		divLines[i] = bdrStyle.Render("│")
+	}
+	divider := strings.Join(divLines, "\n")
+
+	body := lipgloss.JoinHorizontal(lipgloss.Top, leftBlock, divider, rightBlock)
+	bodyW := lipgloss.Width(body)
+
+	footer := lipgloss.NewStyle().Padding(0, pad).Render(
+		dimStyle.Render("? / Esc / q で閉じる"),
+	)
+	sepLine := bdrStyle.Render(strings.Repeat("─", bodyW))
+	inner := lipgloss.JoinVertical(lipgloss.Left, sepLine, body, sepLine, footer)
+
+	innerH := lipgloss.Height(inner)
+	innerW := lipgloss.Width(inner)
+	return panelBorderColored(inner, innerW+2, innerH+2, 0, "Keybindings", colorYellow, colorYellow)
 }

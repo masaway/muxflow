@@ -107,7 +107,7 @@ func (m *App) applySortProjects() {
 		if m.cfg.Projects[i].AutoStart != m.cfg.Projects[j].AutoStart {
 			return m.cfg.Projects[i].AutoStart
 		}
-		return m.cfg.Projects[i].Name < m.cfg.Projects[j].Name
+		return false
 	})
 	for i, p := range m.cfg.Projects {
 		if p.Name == currentName {
@@ -529,6 +529,12 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.focus = panelProjects
 		}
 
+	case "h":
+		m.focus = panelProjects
+
+	case "l":
+		m.focus = panelDetail
+
 	case "1":
 		m.focus = panelProjects
 
@@ -579,7 +585,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.adjustListScroll()
 		}
 
-	case "enter", "s":
+	case "enter":
 		if m.cfg == nil || len(m.cfg.Projects) == 0 {
 			break
 		}
@@ -595,7 +601,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusIsErr = false
 		return m, startSessionCmd(p, false)
 
-	case "d", "x":
+	case "x":
 		if m.cfg == nil || len(m.cfg.Projects) == 0 {
 			break
 		}
@@ -663,7 +669,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.status = "ソート: アクティブ優先"
 		} else {
 			m.restoreProjectOrder()
-			m.status = "ソート: 登録順"
+			m.status = "ソート: カスタム順"
 		}
 		m.statusIsErr = false
 		m.listScroll = 0
@@ -707,13 +713,51 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, reloadCmd
 
-	case "n":
+	case "K":
+		if m.cfg == nil || len(m.cfg.Projects) == 0 || m.cursor == 0 {
+			break
+		}
+		if m.sortActiveFirst {
+			m.restoreProjectOrder()
+			m.sortActiveFirst = false
+		}
+		m.cfg.Projects[m.cursor], m.cfg.Projects[m.cursor-1] = m.cfg.Projects[m.cursor-1], m.cfg.Projects[m.cursor]
+		m.cursor--
+		m.adjustListScroll()
+		if err := config.Save(m.cfg); err != nil {
+			m.status = fmt.Sprintf("保存エラー: %v", err)
+			m.statusIsErr = true
+		} else {
+			m.status = ""
+			m.statusIsErr = false
+		}
+
+	case "J":
+		if m.cfg == nil || len(m.cfg.Projects) == 0 || m.cursor >= len(m.cfg.Projects)-1 {
+			break
+		}
+		if m.sortActiveFirst {
+			m.restoreProjectOrder()
+			m.sortActiveFirst = false
+		}
+		m.cfg.Projects[m.cursor], m.cfg.Projects[m.cursor+1] = m.cfg.Projects[m.cursor+1], m.cfg.Projects[m.cursor]
+		m.cursor++
+		m.adjustListScroll()
+		if err := config.Save(m.cfg); err != nil {
+			m.status = fmt.Sprintf("保存エラー: %v", err)
+			m.statusIsErr = true
+		} else {
+			m.status = ""
+			m.statusIsErr = false
+		}
+
+	case "s":
 		m.scanner = NewScanner(m.cfg)
 		m.scanner.Resize(m.width, m.height)
 		m.currentScreen = screenScan
 		return m, m.scanner.LoadCmd()
 
-	case "c":
+	case "n":
 		if m.cfg != nil {
 			m.quickstart = NewQuickstart(m.cfg)
 			m.quickstart.Resize(m.width, m.height)
@@ -895,7 +939,7 @@ func (m *App) renderKeyHints() string {
 	type hint struct{ key, desc string }
 	hints := []hint{
 		{"Enter", "起動/アタッチ"}, {"e", "編集"},
-		{"a", "自動起動"}, {"c", "新規作成"}, {"n", "スキャン"}, {"?", "ヘルプ"},
+		{"a", "自動起動"}, {"n", "新規作成"}, {"s", "スキャン"}, {"?", "ヘルプ"},
 	}
 	var parts []string
 	for _, h := range hints {
@@ -915,24 +959,30 @@ func (m *App) renderHelpDialog(bg string) string {
 	}
 	sections := []section{
 		{"ナビゲーション", []entry{
+			{"j / k", "上 / 下移動"},
+			{"h / l", "左 / 右パネル移動"},
 			{"g / G", "先頭 / 末尾"},
 			{"Tab", "フォーカス切替"},
 			{"1 / 2", "フォーカス直接指定"},
 		}},
 		{"セッション", []entry{
-			{"Enter / s", "起動 / アタッチ"},
-			{"d / x", "停止"},
+			{"Enter", "起動 / アタッチ"},
+			{"x", "停止"},
 			{"R", "再起動（確認あり）"},
+			{"r", "設定再読み込み・同期"},
 		}},
 		{"プロジェクト", []entry{
 			{"e", "編集"},
-			{"c", "新規セッション作成"},
+			{"n", "新規セッション作成"},
 			{"a", "自動起動トグル"},
 			{"A", "自動起動を全て起動"},
+			{"K / J", "順番を上 / 下に移動"},
+			{"o", "ソート切替（アクティブ優先 / カスタム順）"},
 			{"X", "スキップ済みへ移動"},
-			{"n", "スキャン"},
-			{"S", "スキャン先ディレクトリ"},
-			{"r", "設定再読み込み"},
+		}},
+		{"スキャン", []entry{
+			{"s", "スキャン実行"},
+			{"S", "スキャン先ディレクトリ設定"},
 		}},
 		{"その他", []entry{
 			{"?", "ヘルプ"},
@@ -940,17 +990,41 @@ func (m *App) renderHelpDialog(bg string) string {
 		}},
 	}
 
-	keyStyle := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Width(12)
+	const keyW = 12
+	keyStyle := lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Width(keyW)
 	descStyle := lipgloss.NewStyle().Foreground(colorFg)
 	secTitleStyle := lipgloss.NewStyle().Foreground(colorPurple).Bold(true)
 	bdrStyle := lipgloss.NewStyle().Foreground(colorBorder)
 	dimStyle := lipgloss.NewStyle().Foreground(colorFgDim)
 
-	// colContentW = 実際のコンテンツ幅（key 12 + space 1 + desc 最大 ~22 = 35 以上必要）
 	colContentW := 40
 	pad := 2
-	// colStyle の Width は外側の幅 = colContentW + pad*2
 	colStyle := lipgloss.NewStyle().Width(colContentW + pad*2).Padding(1, pad)
+	descMaxW := colContentW - keyW - 1
+	descIndent := strings.Repeat(" ", keyW+1)
+
+	wrapDesc := func(text string) string {
+		if runewidth.StringWidth(text) <= descMaxW {
+			return text
+		}
+		var lines []string
+		var cur strings.Builder
+		curW := 0
+		for _, r := range text {
+			rw := runewidth.RuneWidth(r)
+			if curW+rw > descMaxW && cur.Len() > 0 {
+				lines = append(lines, cur.String())
+				cur.Reset()
+				curW = 0
+			}
+			cur.WriteRune(r)
+			curW += rw
+		}
+		if cur.Len() > 0 {
+			lines = append(lines, cur.String())
+		}
+		return strings.Join(lines, "\n"+descIndent)
+	}
 
 	renderSection := func(sec section) string {
 		lines := []string{
@@ -958,13 +1032,13 @@ func (m *App) renderHelpDialog(bg string) string {
 			bdrStyle.Render(strings.Repeat("─", colContentW)),
 		}
 		for _, e := range sec.entries {
-			lines = append(lines, keyStyle.Render(e.key)+" "+descStyle.Render(e.desc))
+			lines = append(lines, keyStyle.Render(e.key)+" "+descStyle.Render(wrapDesc(e.desc)))
 		}
 		return strings.Join(lines, "\n")
 	}
 
 	leftBlock := colStyle.Render(lipgloss.JoinVertical(lipgloss.Left,
-		renderSection(sections[0]), "", renderSection(sections[1]),
+		renderSection(sections[0]), "", renderSection(sections[1]), "", renderSection(sections[4]),
 	))
 	rightBlock := colStyle.Render(lipgloss.JoinVertical(lipgloss.Left,
 		renderSection(sections[2]), "", renderSection(sections[3]),

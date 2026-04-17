@@ -199,7 +199,7 @@ func (m *ScanModel) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.skipCmd(m.cursor)
 		}
 
-	case "enter", "s":
+	case "enter":
 		if m.isHeader(m.cursor) {
 			m.showSkipped = !m.showSkipped
 			break
