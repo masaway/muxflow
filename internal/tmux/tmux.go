@@ -218,10 +218,20 @@ func InspectSession(name string) []config.Window {
 	return windows
 }
 
+// IsInsideTmux は現在tmuxセッション内で実行されているかを返す
+func IsInsideTmux() bool {
+	return os.Getenv("TMUX") != ""
+}
+
+// SwitchClient はtmuxのswitch-clientを実行する（tmux内専用）
+func SwitchClient(name string) error {
+	return exec.Command("tmux", socketArgs([]string{"switch-client", "-t", name})...).Run()
+}
+
 // AttachOrSwitch はtmux内ならswitch-client、外ならattach-sessionを実行する
 func AttachOrSwitch(name string) error {
-	if os.Getenv("TMUX") != "" {
-		return exec.Command("tmux", socketArgs([]string{"switch-client", "-t", name})...).Run()
+	if IsInsideTmux() {
+		return SwitchClient(name)
 	}
 	cmd := exec.Command("tmux", socketArgs([]string{"attach-session", "-t", name})...)
 	cmd.Stdin = os.Stdin

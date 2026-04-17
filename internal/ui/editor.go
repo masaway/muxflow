@@ -439,6 +439,12 @@ func (m *EditorModel) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.panel = editorPanelWindows
 		}
 
+	case "1":
+		m.panel = editorPanelWindows
+
+	case "2":
+		m.panel = editorPanelPanes
+
 	case "j", "down":
 		if m.panel == editorPanelWindows {
 			if m.winCursor < len(m.project.Windows)-1 {
@@ -679,7 +685,17 @@ func (m *EditorModel) renderWindowPanel(totalW, totalH int) string {
 				))
 			}
 		} else {
-			lines = append(lines, fmt.Sprintf("   %s%s", styleNormal.Render(w.Name), layoutSuffix))
+			rawSuffix := ""
+			if isNamedLayout(w.Layout) {
+				rawSuffix = "  " + w.Layout
+			} else if w.Layout != "" {
+				rawSuffix = "  [カスタム]"
+			}
+			nameMaxW := innerW - 3 - runewidth.StringWidth(rawSuffix)
+			if nameMaxW < 1 {
+				nameMaxW = 1
+			}
+			lines = append(lines, fmt.Sprintf("   %s%s", styleNormal.Render(truncateStr(w.Name, nameMaxW)), layoutSuffix))
 		}
 	}
 
@@ -728,21 +744,21 @@ func (m *EditorModel) renderPanePanel(totalW, totalH int) string {
 				cmdMaxW = 4
 			}
 
+			execBotPrefix := "          "
+			if pane.Execute {
+				execBotPrefix = "        ▶ "
+			}
 			top := fmt.Sprintf(" pane %d  %s  %s", i, execStr, styleDim.Render(truncateStr(dir, dirMaxW)))
-			bot := fmt.Sprintf("          %s", styleYellow.Render(truncateStr(cmd, cmdMaxW)))
+			bot := fmt.Sprintf("%s%s", execBotPrefix, styleYellow.Render(truncateStr(cmd, cmdMaxW)))
 
 			if i == m.paneCursor {
 				if m.panel == editorPanelPanes {
-					execRaw := "▷"
-					if pane.Execute {
-						execRaw = "▶"
-					}
 					top = styleSelectedItem.Width(innerW).Render(
-						fmt.Sprintf(" pane %d  %s  %s", i, execRaw, truncateStr(dir, dirMaxW)),
+						fmt.Sprintf(" pane %d  %s  %s", i, execStr, truncateStr(dir, dirMaxW)),
 					)
 					bot = lipgloss.NewStyle().
 						Background(colorBg2).Foreground(colorYellow).Width(innerW).
-						Render(fmt.Sprintf("          %s", truncateStr(cmd, cmdMaxW)))
+						Render(fmt.Sprintf("%s%s", execBotPrefix, truncateStr(cmd, cmdMaxW)))
 				} else {
 					top = lipgloss.NewStyle().Foreground(colorCyan).Render(top)
 				}

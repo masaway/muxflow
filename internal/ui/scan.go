@@ -265,10 +265,15 @@ func (m *ScanModel) unskipCmd(si int) tea.Cmd {
 func (m *ScanModel) saveCmd() tea.Cmd {
 	for i, p := range m.projects {
 		if m.selected[i] {
-			m.cfg.Projects = append(m.cfg.Projects, config.Project{
-				Name: p.Name,
-				Path: p.Path,
-			})
+			proj := config.Project{Name: p.Name, Path: p.Path}
+			for j, hp := range m.cfg.HiddenProjects {
+				if hp.Path == p.Path {
+					proj = hp
+					m.cfg.HiddenProjects = append(m.cfg.HiddenProjects[:j], m.cfg.HiddenProjects[j+1:]...)
+					break
+				}
+			}
+			m.cfg.Projects = append(m.cfg.Projects, proj)
 		}
 	}
 	cfg := m.cfg
