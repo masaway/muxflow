@@ -2,7 +2,13 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-tmuxセッションをTUIで管理するツールです。プロジェクト一覧からセッションを起動・アタッチしたり、PC再起動後にまとめて自動起動したりできます。
+**tmuxのコマンドを覚えなくても、tmuxを使いこなせる。**
+
+`tmux new-session -s myproject` や `tmux attach-session -t myproject`——そんなコマンドを毎回調べていませんか？  
+muxflow は、[lazygit](https://github.com/jesseduffield/lazygit) が git を直感的にしたように、**tmux をキーボード操作だけで扱える TUI ツール**です。
+
+プロジェクト一覧からセッションを起動・アタッチしたり、PC再起動後にまとめて自動起動したりできます。  
+ウィンドウ・ペインの分割レイアウトや、よく使う起動コマンド（`docker compose up`、`npm run dev` など）を登録しておけば、`Enter` 一発でいつでも同じ環境が立ち上がります。
 
 [Bubble Tea](https://github.com/charmbracelet/bubbletea) + [lipgloss](https://github.com/charmbracelet/lipgloss) で実装されています。
 

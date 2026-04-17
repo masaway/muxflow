@@ -54,7 +54,8 @@ type App struct {
 	listScroll   int
 
 	// 確認ダイアログ
-	confirmTarget string // 確認対象のセッション名（空 = ダイアログ非表示）
+	confirmTarget         string   // 確認対象のセッション名（空 = ダイアログ非表示）
+	confirmActiveProcesses []string // ダイアログ表示用: 実行中プロセス名
 
 	// tmux同期確認ダイアログ
 	pendingSyncCfg      *config.Config
@@ -162,6 +163,11 @@ type sessionRestartedMsg struct {
 
 type switchClientMsg struct {
 	err error
+}
+
+type activeProcessesCheckedMsg struct {
+	projectName string
+	processes   []string
 }
 
 type windowSyncChoice struct {
@@ -310,6 +316,13 @@ func restartSessionCmd(p config.Project) tea.Cmd {
 		}
 		_, err := tmux.CreateSession(&p, false)
 		return sessionRestartedMsg{name: p.Name, err: err}
+	}
+}
+
+func checkActiveProcessesCmd(p config.Project) tea.Cmd {
+	return func() tea.Msg {
+		processes, _ := tmux.ListActiveProcesses(p.Name)
+		return activeProcessesCheckedMsg{projectName: p.Name, processes: processes}
 	}
 }
 
@@ -494,6 +507,11 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, reloadCmd
 
+	case activeProcessesCheckedMsg:
+		m.confirmTarget = msg.projectName
+		m.confirmActiveProcesses = msg.processes
+		return m, nil
+
 	case tea.KeyMsg:
 		if m.pendingSyncCfg != nil {
 			return m.handleSyncConfirmKey(msg)
@@ -664,7 +682,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusIsErr = true
 			break
 		}
-		m.confirmTarget = p.Name
+		return m, checkActiveProcessesCmd(p)
 
 	case "a":
 		if m.cfg == nil || len(m.cfg.Projects) == 0 || m.cursor >= len(m.cfg.Projects) {
@@ -832,6 +850,7 @@ func (m *App) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "y", "Y":
 		name := m.confirmTarget
 		m.confirmTarget = ""
+		m.confirmActiveProcesses = nil
 		if m.cfg == nil {
 			break
 		}
@@ -844,6 +863,7 @@ func (m *App) handleConfirmKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "n", "N", "esc":
 		m.confirmTarget = ""
+		m.confirmActiveProcesses = nil
 	}
 	return m, nil
 }
@@ -1620,8 +1640,23 @@ func (m *App) renderConfirmDialog(bg string) string {
 		dialogW = dw
 	}
 
+	var parts []string
+	parts = append(parts, line1)
+	if len(m.confirmActiveProcesses) > 0 {
+		parts = append(parts, "")
+		parts = append(parts, styleYellow.Render("⚠  以下のプロセスが実行中です:"))
+		for _, proc := range m.confirmActiveProcesses {
+			procLine := styleDim.Render("  • ") + styleNormal.Render(proc)
+			parts = append(parts, procLine)
+			if w := lipgloss.Width(procLine) + 6; w > dialogW {
+				dialogW = w
+			}
+		}
+	}
+	parts = append(parts, "", line2)
+
 	inner := lipgloss.NewStyle().Padding(1, 2).Width(dialogW).
-		Render(lipgloss.JoinVertical(lipgloss.Center, line1, "", line2))
+		Render(lipgloss.JoinVertical(lipgloss.Left, parts...))
 	innerW := lipgloss.Width(inner)
 	innerH := lipgloss.Height(inner)
 	dialog := panelBorderColored(inner, innerW+2, innerH+2, 0, "再起動確認", colorYellow, colorYellow)
