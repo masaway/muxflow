@@ -78,10 +78,14 @@ type paneFormState struct {
 }
 
 type windowFormState struct {
-	name      textinput.Model
-	layoutIdx int
-	focus     int // 0=name, 1=layout
-	isNew     bool
+	name         textinput.Model
+	layoutIdx    int
+	dirOptions   []string
+	dirCursor    int
+	dirInput     textinput.Model
+	dirInputMode bool
+	focus        int // 0=name, 1=layout, 2=dir
+	isNew        bool
 }
 
 // ─── メッセージ ───────────────────────────────────────────────────────────────
@@ -162,7 +166,7 @@ func newPaneForm(p config.Pane, proj config.Project, isNew bool) paneFormState {
 	return paneFormState{dirOptions: opts, dirCursor: cursor, dirInput: dirInput, dirInputMode: dirInputMode, cmd: cmd, execute: p.Execute, focus: 0, isNew: isNew}
 }
 
-func newWindowForm(w config.Window, isNew bool) windowFormState {
+func newWindowForm(w config.Window, isNew bool, projPath string) windowFormState {
 	name := textinput.New()
 	name.Placeholder = "例: dev"
 	name.SetValue(w.Name)
@@ -176,7 +180,38 @@ func newWindowForm(w config.Window, isNew bool) windowFormState {
 			break
 		}
 	}
-	return windowFormState{name: name, layoutIdx: layoutIdx, focus: 0, isNew: isNew}
+
+	opts := listProjectDirs(projPath)
+	initDir := "."
+	if !isNew && len(w.Panes) > 0 && w.Panes[0].Dir != "" {
+		initDir = w.Panes[0].Dir
+	}
+	cursor := 0
+	found := false
+	for i, d := range opts {
+		if d == initDir {
+			cursor = i
+			found = true
+			break
+		}
+	}
+
+	dirInput := textinput.New()
+	dirInput.Placeholder = "例: src/api"
+	dirInput.Width = 38
+
+	dirInputMode := false
+	focusIdx := 0
+	if !found && initDir != "." {
+		dirInputMode = true
+		focusIdx = 2
+		dirInput.SetValue(initDir)
+		dirInput.CursorEnd()
+		dirInput.Focus()
+		name.Blur()
+	}
+
+	return windowFormState{name: name, layoutIdx: layoutIdx, dirOptions: opts, dirCursor: cursor, dirInput: dirInput, dirInputMode: dirInputMode, focus: focusIdx, isNew: isNew}
 }
 
 // ─── ヘルパー ─────────────────────────────────────────────────────────────────
@@ -231,6 +266,11 @@ func (m *EditorModel) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.paneForm.dirInput.Blur()
 				return m, nil
 			}
+			if m.formMode == editorFormWindow && m.winForm.dirInputMode && m.winForm.focus == 2 {
+				m.winForm.dirInputMode = false
+				m.winForm.dirInput.Blur()
+				return m, nil
+			}
 			m.formMode = editorFormNone
 			return m, nil
 
@@ -242,7 +282,7 @@ func (m *EditorModel) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if m.formMode == editorFormPane && m.paneForm.focus == 2 {
 					// execute フィールドは通常保存
-				} else if m.formMode == editorFormWindow && m.winForm.focus == 0 {
+				} else if m.formMode == editorFormWindow && (m.winForm.focus == 0 || m.winForm.dirInputMode) {
 					break
 				}
 			}
@@ -263,12 +303,27 @@ func (m *EditorModel) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.paneForm.dirInputMode = true
 				return m, nil
 			}
+			if m.formMode == editorFormWindow && m.winForm.focus == 2 && !m.winForm.dirInputMode {
+				current := "."
+				if len(m.winForm.dirOptions) > 0 {
+					current = m.winForm.dirOptions[m.winForm.dirCursor]
+				}
+				m.winForm.dirInput.SetValue(current)
+				m.winForm.dirInput.CursorEnd()
+				m.winForm.dirInput.Focus()
+				m.winForm.dirInputMode = true
+				return m, nil
+			}
 
 		case "tab":
 			if m.formMode == editorFormPane && m.paneForm.dirInputMode {
-				// dirInputMode 中は Tab で次フィールドへ（値は保持したまま）
 				m.paneForm.dirInput.Blur()
 				m.cyclePaneFormFocus(true)
+				return m, nil
+			}
+			if m.formMode == editorFormWindow && m.winForm.dirInputMode {
+				m.winForm.dirInput.Blur()
+				m.cycleWindowFormFocus(true)
 				return m, nil
 			}
 			if m.formMode == editorFormPane {
@@ -280,9 +335,13 @@ func (m *EditorModel) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "shift+tab":
 			if m.formMode == editorFormPane && m.paneForm.dirInputMode {
-				// dirInputMode 中は Shift+Tab で前フィールドへ（値は保持したまま）
 				m.paneForm.dirInput.Blur()
 				m.cyclePaneFormFocus(false)
+				return m, nil
+			}
+			if m.formMode == editorFormWindow && m.winForm.dirInputMode {
+				m.winForm.dirInput.Blur()
+				m.cycleWindowFormFocus(false)
 				return m, nil
 			}
 			if m.formMode == editorFormPane {
@@ -318,11 +377,24 @@ func (m *EditorModel) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
+			if m.formMode == editorFormWindow && m.winForm.focus == 2 && !m.winForm.dirInputMode {
+				n := len(m.winForm.dirOptions)
+				if n > 0 && m.winForm.dirCursor < n-1 {
+					m.winForm.dirCursor++
+				}
+				return m, nil
+			}
 
 		case "k", "up":
 			if m.formMode == editorFormPane && m.paneForm.focus == 0 && !m.paneForm.dirInputMode {
 				if m.paneForm.dirCursor > 0 {
 					m.paneForm.dirCursor--
+				}
+				return m, nil
+			}
+			if m.formMode == editorFormWindow && m.winForm.focus == 2 && !m.winForm.dirInputMode {
+				if m.winForm.dirCursor > 0 {
+					m.winForm.dirCursor--
 				}
 				return m, nil
 			}
@@ -340,6 +412,8 @@ func (m *EditorModel) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	} else {
 		if m.winForm.focus == 0 {
 			m.winForm.name, cmd = m.winForm.name.Update(msg)
+		} else if m.winForm.dirInputMode && m.winForm.focus == 2 {
+			m.winForm.dirInput, cmd = m.winForm.dirInput.Update(msg)
 		}
 	}
 	return m, cmd
@@ -362,15 +436,18 @@ func (m *EditorModel) cyclePaneFormFocus(fwd bool) {
 }
 
 func (m *EditorModel) cycleWindowFormFocus(fwd bool) {
-	n := 2 // name, layout
+	n := 3 // name, layout, dir
 	if fwd {
 		m.winForm.focus = (m.winForm.focus + 1) % n
 	} else {
 		m.winForm.focus = (m.winForm.focus - 1 + n) % n
 	}
 	m.winForm.name.Blur()
+	m.winForm.dirInput.Blur()
 	if m.winForm.focus == 0 {
 		m.winForm.name.Focus()
+	} else if m.winForm.focus == 2 && m.winForm.dirInputMode {
+		m.winForm.dirInput.Focus()
 	}
 }
 
@@ -409,17 +486,28 @@ func (m *EditorModel) commitWindowForm() (tea.Model, tea.Cmd) {
 		name = "window"
 	}
 	layout := windowLayouts[m.winForm.layoutIdx]
+	dir := "."
+	if m.winForm.dirInputMode {
+		if v := strings.TrimSpace(m.winForm.dirInput.Value()); v != "" {
+			dir = v
+		}
+	} else if len(m.winForm.dirOptions) > 0 {
+		dir = m.winForm.dirOptions[m.winForm.dirCursor]
+	}
 	if m.winForm.isNew {
 		m.project.Windows = append(m.project.Windows, config.Window{
 			Name:   name,
 			Layout: layout,
-			Panes:  []config.Pane{{Dir: "."}},
+			Panes:  []config.Pane{{Dir: dir}},
 		})
 		m.winCursor = len(m.project.Windows) - 1
 		m.paneCursor = 0
 	} else {
 		m.project.Windows[m.winCursor].Name = name
 		m.project.Windows[m.winCursor].Layout = layout
+		if len(m.project.Windows[m.winCursor].Panes) > 0 {
+			m.project.Windows[m.winCursor].Panes[0].Dir = dir
+		}
 	}
 	m.formMode = editorFormNone
 	return m, m.saveCmd()
@@ -493,7 +581,7 @@ func (m *EditorModel) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.winForm = newWindowForm(config.Window{
 				Name:   fmt.Sprintf("window%d", len(m.project.Windows)),
 				Layout: "even-horizontal",
-			}, true)
+			}, true, m.project.Path)
 			m.formMode = editorFormWindow
 		} else {
 			w := m.selectedWindow()
@@ -508,7 +596,7 @@ func (m *EditorModel) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.panel == editorPanelWindows {
 			w := m.selectedWindow()
 			if w != nil {
-				m.winForm = newWindowForm(*w, false)
+				m.winForm = newWindowForm(*w, false, m.project.Path)
 				m.formMode = editorFormWindow
 			}
 		} else {
@@ -856,18 +944,15 @@ func (m *EditorModel) renderPanePanel(totalW, totalH int) string {
 	return panelBorder(strings.Join(lines, "\n"), totalW, totalH, 2, panelTitle, m.panel == editorPanelPanes)
 }
 
-// renderDirPicker はDir選択ピッカーをレンダリングする（最大5件表示）
-func renderDirPicker(f paneFormState, formWidth int) string {
-	focused := f.focus == 0
-
-	// テキスト入力モード
-	if f.dirInputMode {
+// renderDirPickerGeneric はDir選択ピッカーをレンダリングする汎用関数（最大5件表示）
+func renderDirPickerGeneric(dirOptions []string, dirCursor int, dirInput textinput.Model, dirInputMode bool, focused bool, formWidth int) string {
+	if dirInputMode {
 		hint := styleDim.Render("  Esc でリストに戻る")
-		return f.dirInput.View() + hint
+		return dirInput.View() + hint
 	}
 
 	const visRows = 5
-	opts := f.dirOptions
+	opts := dirOptions
 	if len(opts) == 0 {
 		hint := ""
 		if focused {
@@ -875,9 +960,8 @@ func renderDirPicker(f paneFormState, formWidth int) string {
 		}
 		return styleDim.Render("(なし)") + hint
 	}
-	cursor := f.dirCursor
+	cursor := dirCursor
 
-	// スクロールウィンドウ計算
 	start := 0
 	if cursor >= visRows {
 		start = cursor - visRows + 1
@@ -908,6 +992,11 @@ func renderDirPicker(f paneFormState, formWidth int) string {
 	}
 
 	return strings.Join(rows, "\n"+strings.Repeat(" ", 10)) + hint
+}
+
+// renderDirPicker はDir選択ピッカーをレンダリングする（最大5件表示）
+func renderDirPicker(f paneFormState, formWidth int) string {
+	return renderDirPickerGeneric(f.dirOptions, f.dirCursor, f.dirInput, f.dirInputMode, f.focus == 0, formWidth)
 }
 
 func (m *EditorModel) renderPaneFormBox() string {
@@ -1319,7 +1408,19 @@ func (m *EditorModel) renderWindowFormBox() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(styleDim.Render("Esc キャンセル  Enter 保存"))
+
+	// Dir picker
+	dirLabel := styleDim.Render("Dir        ")
+	if f.focus == 2 {
+		dirLabel = lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("Dir        ")
+	}
+	sb.WriteString(dirLabel + "  " + renderDirPickerGeneric(f.dirOptions, f.dirCursor, f.dirInput, f.dirInputMode, f.focus == 2, w) + "\n\n")
+
+	if f.dirInputMode {
+		sb.WriteString(styleDim.Render("Esc リストに戻る  Enter 保存"))
+	} else {
+		sb.WriteString(styleDim.Render("Esc キャンセル  Enter 保存"))
+	}
 
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).

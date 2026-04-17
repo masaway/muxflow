@@ -79,8 +79,8 @@ set-hook -g client-session-changed 'run-shell "tmux set-option -t \"#{session_na
 bind s choose-tree -sZ -F "#{?@claude_notification,🔔,} #{session_windows} windows"
 set -g focus-events on
 
-# muxflow: PREFIX+m で起動
-bind m new-window -n "muxflow" "muxflow"
+# muxflow: PREFIX+m でポップアップ起動
+bind m run-shell 'tmux display-popup -E -h 90% -w 90% "muxflow"'
 `
 
 // ConfigPath は ~/.tmux.conf のフルパスを返す
