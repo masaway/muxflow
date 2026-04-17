@@ -519,6 +519,40 @@ func (m *EditorModel) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case "K":
+		if m.panel == editorPanelWindows {
+			if m.winCursor > 0 {
+				wins := m.project.Windows
+				wins[m.winCursor], wins[m.winCursor-1] = wins[m.winCursor-1], wins[m.winCursor]
+				m.winCursor--
+				return m, m.saveCmd()
+			}
+		} else {
+			w := m.selectedWindow()
+			if w != nil && m.paneCursor > 0 {
+				w.Panes[m.paneCursor], w.Panes[m.paneCursor-1] = w.Panes[m.paneCursor-1], w.Panes[m.paneCursor]
+				m.paneCursor--
+				return m, m.saveCmd()
+			}
+		}
+
+	case "J":
+		if m.panel == editorPanelWindows {
+			wins := m.project.Windows
+			if m.winCursor < len(wins)-1 {
+				wins[m.winCursor], wins[m.winCursor+1] = wins[m.winCursor+1], wins[m.winCursor]
+				m.winCursor++
+				return m, m.saveCmd()
+			}
+		} else {
+			w := m.selectedWindow()
+			if w != nil && m.paneCursor < len(w.Panes)-1 {
+				w.Panes[m.paneCursor], w.Panes[m.paneCursor+1] = w.Panes[m.paneCursor+1], w.Panes[m.paneCursor]
+				m.paneCursor++
+				return m, m.saveCmd()
+			}
+		}
+
 	case "d":
 		if m.panel == editorPanelWindows {
 			if len(m.project.Windows) > 1 {
@@ -673,7 +707,7 @@ func (m *EditorModel) renderEditorKeyHints(width int) string {
 	type hint struct{ key, desc string }
 	hints := []hint{
 		{"a", "追加"}, {"e", "編集"}, {"d", "削除"},
-		{"Tab", "切替"}, {"?", "ヘルプ"}, {"Esc", "戻る"},
+		{"J/K", "並替"}, {"Tab", "切替"}, {"?", "ヘルプ"}, {"Esc", "戻る"},
 	}
 	var parts []string
 	for _, h := range hints {
@@ -1312,6 +1346,7 @@ func (m *EditorModel) renderEditorHelp() string {
 			{"a", "追加"},
 			{"e", "編集"},
 			{"d", "削除"},
+			{"J / K", "下 / 上に移動"},
 			{"w / Ctrl+S", "保存"},
 		}},
 		{"フォーム内", []entry{
