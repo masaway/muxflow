@@ -77,6 +77,30 @@ func KillSession(name string) error {
 	return exec.Command("tmux", "kill-session", "-t", name).Run()
 }
 
+var shellProcesses = map[string]bool{
+	"bash": true, "zsh": true, "sh": true, "fish": true,
+	"tcsh": true, "ksh": true, "dash": true, "csh": true,
+}
+
+// ListActiveProcesses はセッション内で実行中のプロセス名一覧を返す（シェルを除く）
+func ListActiveProcesses(sessionName string) ([]string, error) {
+	code, out := runCmd("list-panes", "-t", sessionName, "-a", "-F", "#{pane_current_command}")
+	if code != 0 {
+		return nil, fmt.Errorf("list-panes failed")
+	}
+	seen := map[string]bool{}
+	var result []string
+	for _, cmd := range strings.Split(out, "\n") {
+		cmd = strings.TrimSpace(cmd)
+		if cmd == "" || shellProcesses[cmd] || seen[cmd] {
+			continue
+		}
+		seen[cmd] = true
+		result = append(result, cmd)
+	}
+	return result, nil
+}
+
 func resolveDir(projectPath, paneDir string) string {
 	paneDir = config.ExpandPath(paneDir)
 	if filepath.IsAbs(paneDir) {
