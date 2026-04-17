@@ -644,7 +644,7 @@ func (m *EditorModel) buildEditorDialog(w, h int) string {
 		panelH = 4
 	}
 
-	leftW := innerW / 3
+	leftW := innerW / 2
 	if leftW < 22 {
 		leftW = 22
 	}
@@ -698,9 +698,37 @@ func (m *EditorModel) renderWindowPanel(totalW, totalH int) string {
 		}
 		if i == m.winCursor {
 			if m.panel == editorPanelWindows {
-				lines = append(lines, styleSelectedItem.Width(innerW).Render(
-					fmt.Sprintf(" ▸ %s%s", w.Name, layoutSuffix),
-				))
+				rawLayout := ""
+				if isNamedLayout(w.Layout) {
+					rawLayout = w.Layout
+				} else if w.Layout != "" {
+					rawLayout = "[カスタム]"
+				}
+				layoutSuffixW := 0
+				if rawLayout != "" {
+					layoutSuffixW = runewidth.StringWidth("  " + rawLayout)
+				}
+				nameMaxW := innerW - runewidth.StringWidth(" ▸ ") - layoutSuffixW
+				if nameMaxW < 1 {
+					nameMaxW = 1
+				}
+				truncatedName := truncateStr(w.Name, nameMaxW)
+				nameRendered := lipgloss.NewStyle().
+					Background(colorSelected).Foreground(colorBlue).Bold(true).
+					Render(" ▸ " + truncatedName)
+				layoutRendered := ""
+				if rawLayout != "" {
+					layoutRendered = lipgloss.NewStyle().
+						Background(colorSelected).Foreground(lipgloss.Color("#497fab")).
+						Render("  " + rawLayout)
+				}
+				usedW := runewidth.StringWidth(" ▸ "+truncatedName) + layoutSuffixW
+				padW := innerW - usedW
+				if padW < 0 {
+					padW = 0
+				}
+				pad := lipgloss.NewStyle().Background(colorSelected).Render(strings.Repeat(" ", padW))
+				lines = append(lines, nameRendered+layoutRendered+pad)
 			} else {
 				lines = append(lines, lipgloss.NewStyle().Foreground(colorCyan).Width(innerW).Render(
 					fmt.Sprintf(" ▸ %s%s", w.Name, layoutSuffix),
@@ -742,9 +770,11 @@ func (m *EditorModel) renderPanePanel(totalW, totalH int) string {
 	var lines []string
 	if win != nil {
 		for i, pane := range win.Panes {
-			execStr := styleDim.Render("▷")
+			execChar := "▷"
+			execStr := styleDim.Render(execChar)
 			if pane.Execute {
-				execStr = styleRed.Render("▶")
+				execChar = "▶"
+				execStr = styleRed.Render(execChar)
 			}
 			dir := pane.Dir
 			if dir == "" {
@@ -776,7 +806,7 @@ func (m *EditorModel) renderPanePanel(totalW, totalH int) string {
 			if i == m.paneCursor {
 				if m.panel == editorPanelPanes {
 					top = styleSelectedItem.Width(innerW).Render(
-						fmt.Sprintf(" pane %d  %s  %s", i, execStr, truncateStr(dir, dirMaxW)),
+						fmt.Sprintf(" pane %d  %s  %s", i, execChar, truncateStr(dir, dirMaxW)),
 					)
 					bot = lipgloss.NewStyle().
 						Background(colorBg2).Foreground(colorYellow).Width(innerW).

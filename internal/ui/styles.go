@@ -17,7 +17,7 @@ var (
 	colorCyan        = lipgloss.Color("#7dcfff")
 	colorBlue        = lipgloss.Color("#7aa2f7")
 	colorPurple      = lipgloss.Color("#bb9af7")
-	colorSelected    = lipgloss.Color("#2d3f1e") // 緑がかった選択色
+	colorSelected    = lipgloss.Color("#30477a") // 青がかった選択色
 )
 
 var (
@@ -35,7 +35,7 @@ var (
 
 	styleSelectedItem = lipgloss.NewStyle().
 				Background(colorSelected).
-				Foreground(colorGreen).
+				Foreground(colorBlue).
 				Bold(true)
 
 	styleDim = lipgloss.NewStyle().
