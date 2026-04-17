@@ -30,6 +30,7 @@ const (
 	screenScan
 	screenSetup
 	screenQuickstart
+	screenTmuxConf
 )
 
 // App はメインのbubbletea Model
@@ -70,6 +71,8 @@ type App struct {
 	scanner       *ScanModel
 	setup         *SetupModel
 	quickstart    *QuickstartModel
+	tmuxConf      *TmuxConfModel
+	firstSetup    bool // 初回セットアップ中フラグ
 
 	showHelp   bool
 	showHidden bool
@@ -351,6 +354,9 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.quickstart != nil {
 			m.quickstart.Resize(ws.Width, ws.Height)
 		}
+		if m.tmuxConf != nil {
+			m.tmuxConf.Resize(ws.Width, ws.Height)
+		}
 		return m, nil
 	}
 
@@ -386,12 +392,32 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setup = result.(*SetupModel)
 			if m.setup.IsDone() {
 				skipped := m.setup.IsSkipped()
-				m.currentScreen = screenMain
+				isFirst := m.firstSetup
+				m.firstSetup = false
 				m.setup = nil
 				if skipped {
+					m.currentScreen = screenMain
 					return m, nil
 				}
+				if isFirst {
+					m.tmuxConf = NewTmuxConfModel()
+					m.tmuxConf.Resize(m.width, m.height)
+					m.currentScreen = screenTmuxConf
+					return m, reloadCmd
+				}
+				m.currentScreen = screenMain
 				return m, reloadCmd
+			}
+			return m, cmd
+		}
+
+	case screenTmuxConf:
+		if m.tmuxConf != nil {
+			result, cmd := m.tmuxConf.Update(msg)
+			m.tmuxConf = result.(*TmuxConfModel)
+			if m.tmuxConf.IsDone() {
+				m.currentScreen = screenMain
+				m.tmuxConf = nil
 			}
 			return m, cmd
 		}
@@ -435,6 +461,7 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.setup = NewSetup(m.cfg)
 			m.setup.Resize(m.width, m.height)
 			m.currentScreen = screenSetup
+			m.firstSetup = true
 			return m, m.setup.Init()
 		}
 		// 初回起動時: tmuxセッションがゼロならauto_startプロジェクトを一括起動
@@ -1027,6 +1054,10 @@ func (m *App) View() string {
 	case screenSetup:
 		if m.setup != nil {
 			return m.setup.View()
+		}
+	case screenTmuxConf:
+		if m.tmuxConf != nil {
+			return m.tmuxConf.View()
 		}
 	case screenQuickstart:
 		if m.quickstart != nil {
