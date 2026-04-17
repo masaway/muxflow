@@ -70,7 +70,8 @@ type App struct {
 	setup         *SetupModel
 	quickstart    *QuickstartModel
 
-	showHelp bool
+	showHelp   bool
+	showHidden bool
 }
 
 // New はAppを生成する
@@ -331,6 +332,9 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.scanner != nil {
 			m.scanner.Resize(ws.Width, ws.Height)
 		}
+		if m.setup != nil {
+			m.setup.Resize(ws.Width, ws.Height)
+		}
 		if m.quickstart != nil {
 			m.quickstart.Resize(ws.Width, ws.Height)
 		}
@@ -372,8 +376,6 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.currentScreen = screenMain
 				m.setup = nil
 				if skipped {
-					// スキップ時はリロードしない（再度reloadedMsgが来ないのでsetup画面も出ない）
-					// 次回起動時はScanDirectoryが空なので再度setup画面に遷移する
 					return m, nil
 				}
 				return m, reloadCmd
@@ -530,10 +532,33 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "h":
-		m.focus = panelProjects
+		if m.focus == panelProjects && m.isHiddenHeader() {
+			m.showHidden = false
+		} else {
+			m.focus = panelProjects
+		}
 
 	case "l":
-		m.focus = panelDetail
+		if m.focus == panelProjects && m.isHiddenHeader() {
+			m.showHidden = true
+		} else {
+			m.focus = panelDetail
+		}
+
+	case " ":
+		if m.focus == panelProjects && m.isHiddenHeader() {
+			m.showHidden = !m.showHidden
+		}
+
+	case "left":
+		if m.focus == panelProjects && m.isHiddenHeader() {
+			m.showHidden = false
+		}
+
+	case "right":
+		if m.focus == panelProjects && m.isHiddenHeader() {
+			m.showHidden = true
+		}
 
 	case "1":
 		m.focus = panelProjects
@@ -542,7 +567,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focus = panelDetail
 
 	case "r":
-		if m.cfg == nil || len(m.cfg.Projects) == 0 {
+		if m.cfg == nil || len(m.cfg.Projects) == 0 || m.cursor >= len(m.cfg.Projects) {
 			return m, nil
 		}
 		m.status = "更新中..."
@@ -551,7 +576,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "j", "down":
 		if m.focus == panelProjects {
-			if m.cfg != nil && m.cursor < len(m.cfg.Projects)-1 {
+			if m.cfg != nil && m.cursor < m.totalListItems()-1 {
 				m.cursor++
 				m.detailScroll = 0
 				m.adjustListScroll()
@@ -579,14 +604,14 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.detailScroll = 0
 
 	case "G":
-		if m.cfg != nil && len(m.cfg.Projects) > 0 {
-			m.cursor = len(m.cfg.Projects) - 1
+		if m.cfg != nil && m.totalListItems() > 0 {
+			m.cursor = m.totalListItems() - 1
 			m.detailScroll = 0
 			m.adjustListScroll()
 		}
 
 	case "enter":
-		if m.cfg == nil || len(m.cfg.Projects) == 0 {
+		if m.cfg == nil || len(m.cfg.Projects) == 0 || m.cursor >= len(m.cfg.Projects) {
 			break
 		}
 		p := m.cfg.Projects[m.cursor]
@@ -602,7 +627,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, startSessionCmd(p, false)
 
 	case "x":
-		if m.cfg == nil || len(m.cfg.Projects) == 0 {
+		if m.cfg == nil || len(m.cfg.Projects) == 0 || m.cursor >= len(m.cfg.Projects) {
 			break
 		}
 		p := m.cfg.Projects[m.cursor]
@@ -615,7 +640,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, killSessionCmd(p.Name)
 
 	case "e":
-		if m.cfg != nil && len(m.cfg.Projects) > 0 {
+		if m.cfg != nil && len(m.cfg.Projects) > 0 && m.cursor < len(m.cfg.Projects) {
 			m.editor = NewEditor(m.cfg, m.cursor)
 			m.editor.Resize(m.width, m.height)
 			m.currentScreen = screenEditor
@@ -630,7 +655,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "R":
-		if m.cfg == nil || len(m.cfg.Projects) == 0 {
+		if m.cfg == nil || len(m.cfg.Projects) == 0 || m.cursor >= len(m.cfg.Projects) {
 			break
 		}
 		p := m.cfg.Projects[m.cursor]
@@ -642,7 +667,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.confirmTarget = p.Name
 
 	case "a":
-		if m.cfg == nil || len(m.cfg.Projects) == 0 {
+		if m.cfg == nil || len(m.cfg.Projects) == 0 || m.cursor >= len(m.cfg.Projects) {
 			break
 		}
 		m.cfg.Projects[m.cursor].AutoStart = !m.cfg.Projects[m.cursor].AutoStart
@@ -694,13 +719,46 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 
 	case "X":
-		if m.cfg == nil || len(m.cfg.Projects) == 0 {
+		if m.cfg == nil {
+			break
+		}
+		if hi := m.hiddenProjectIdx(); hi >= 0 {
+			// 非表示→通常リストへ復元
+			hidden := m.hiddenItems()
+			p := hidden[hi]
+			// HiddenProjects から削除（あれば）
+			for i, hp := range m.cfg.HiddenProjects {
+				if hp.Path == p.Path {
+					m.cfg.HiddenProjects = append(m.cfg.HiddenProjects[:i], m.cfg.HiddenProjects[i+1:]...)
+					break
+				}
+			}
+			// SkippedPaths から削除
+			for i, sp := range m.cfg.SkippedPaths {
+				if sp == p.Path {
+					m.cfg.SkippedPaths = append(m.cfg.SkippedPaths[:i], m.cfg.SkippedPaths[i+1:]...)
+					break
+				}
+			}
+			m.cfg.Projects = append(m.cfg.Projects, p)
+			if m.cursor >= m.totalListItems() && m.cursor > 0 {
+				m.cursor--
+			}
+			if err := config.Save(m.cfg); err != nil {
+				m.status = fmt.Sprintf("保存エラー: %v", err)
+				m.statusIsErr = true
+			} else {
+				m.status = fmt.Sprintf("'%s' を非表示から復元しました", p.Name)
+				m.statusIsErr = false
+			}
+			return m, reloadCmd
+		}
+		if len(m.cfg.Projects) == 0 || m.cursor >= len(m.cfg.Projects) {
 			break
 		}
 		p := m.cfg.Projects[m.cursor]
 		m.cfg.Projects = append(m.cfg.Projects[:m.cursor], m.cfg.Projects[m.cursor+1:]...)
 		m.cfg.HiddenProjects = append(m.cfg.HiddenProjects, p)
-		m.cfg.SkippedPaths = append(m.cfg.SkippedPaths, p.Path)
 		if m.cursor >= len(m.cfg.Projects) && m.cursor > 0 {
 			m.cursor--
 		}
@@ -708,13 +766,13 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.status = fmt.Sprintf("保存エラー: %v", err)
 			m.statusIsErr = true
 		} else {
-			m.status = fmt.Sprintf("'%s' をスキップ済みへ移動しました", p.Name)
+			m.status = fmt.Sprintf("'%s' を非表示へ移動しました", p.Name)
 			m.statusIsErr = false
 		}
 		return m, reloadCmd
 
 	case "K":
-		if m.cfg == nil || len(m.cfg.Projects) == 0 || m.cursor == 0 {
+		if m.cfg == nil || len(m.cfg.Projects) == 0 || m.cursor == 0 || m.cursor >= len(m.cfg.Projects) {
 			break
 		}
 		if m.sortActiveFirst {
@@ -868,6 +926,65 @@ func (m *App) visibleListItems() int {
 	return items
 }
 
+// hiddenItems は非表示セクションに表示する全アイテムを返す。
+// HiddenProjects に加え、SkippedPaths のみに存在する（スキャン画面でスキップした）
+// エントリも含む。
+func (m *App) hiddenItems() []config.Project {
+	if m.cfg == nil {
+		return nil
+	}
+	items := make([]config.Project, len(m.cfg.HiddenProjects))
+	copy(items, m.cfg.HiddenProjects)
+	inHidden := map[string]bool{}
+	for _, p := range m.cfg.HiddenProjects {
+		inHidden[p.Path] = true
+	}
+	for _, path := range m.cfg.SkippedPaths {
+		if !inHidden[path] {
+			items = append(items, config.Project{
+				Name: filepath.Base(path),
+				Path: path,
+			})
+		}
+	}
+	return items
+}
+
+func (m *App) totalListItems() int {
+	if m.cfg == nil {
+		return 0
+	}
+	hidden := m.hiddenItems()
+	n := len(m.cfg.Projects)
+	if len(hidden) > 0 {
+		n++ // 非表示ヘッダー
+		if m.showHidden {
+			n += len(hidden)
+		}
+	}
+	return n
+}
+
+func (m *App) isHiddenHeader() bool {
+	return m.cfg != nil && len(m.hiddenItems()) > 0 &&
+		m.cursor == len(m.cfg.Projects)
+}
+
+func (m *App) hiddenProjectIdx() int {
+	if m.cfg == nil || !m.showHidden {
+		return -1
+	}
+	hidden := m.hiddenItems()
+	if len(hidden) == 0 {
+		return -1
+	}
+	hi := m.cursor - len(m.cfg.Projects) - 1
+	if hi >= 0 && hi < len(hidden) {
+		return hi
+	}
+	return -1
+}
+
 // ─── View ─────────────────────────────────────────────────────────────────────
 
 func (m *App) View() string {
@@ -978,7 +1095,7 @@ func (m *App) renderHelpDialog(bg string) string {
 			{"A", "自動起動を全て起動"},
 			{"K / J", "順番を上 / 下に移動"},
 			{"o", "ソート切替（アクティブ優先 / カスタム順）"},
-			{"X", "スキップ済みへ移動"},
+				{"X", "非表示へ移動 / 復元"},
 		}},
 		{"スキャン", []entry{
 			{"s", "スキャン実行"},
@@ -1307,12 +1424,19 @@ func (m *App) renderProjectList(totalW, totalH int) string {
 
 	var lines []string
 	if m.cfg != nil {
-		end := m.listScroll + visibleH
-		if end > len(m.cfg.Projects) {
-			end = len(m.cfg.Projects)
+		nameW := innerW - 5
+		if nameW < 1 {
+			nameW = 1
 		}
-		for i := m.listScroll; i < end; i++ {
-			p := m.cfg.Projects[i]
+
+		// 通常プロジェクト
+		for i, p := range m.cfg.Projects {
+			if i < m.listScroll {
+				continue
+			}
+			if len(lines) >= visibleH {
+				break
+			}
 			running := m.sessions[p.Name]
 
 			dot := styleDim.Render("○")
@@ -1324,10 +1448,6 @@ func (m *App) renderProjectList(totalW, totalH int) string {
 				star = styleYellow.Render("★")
 			}
 
-			nameW := innerW - 5
-			if nameW < 1 {
-				nameW = 1
-			}
 			name := p.Name
 			if len(name) > nameW {
 				name = name[:nameW-1] + "…"
@@ -1342,13 +1462,51 @@ func (m *App) renderProjectList(totalW, totalH int) string {
 				if p.AutoStart {
 					starRaw = "★"
 				}
-				line := styleSelectedItem.Width(innerW).Render(
+				lines = append(lines, styleSelectedItem.Width(innerW).Render(
 					fmt.Sprintf("%s%s %-*s ", starRaw, dotRaw, nameW, name),
-				)
-				lines = append(lines, line)
+				))
 			} else {
-				line := fmt.Sprintf("%s%s %-*s ", star, dot, nameW, styleNormal.Render(name))
-				lines = append(lines, line)
+				lines = append(lines, fmt.Sprintf("%s%s %-*s ", star, dot, nameW, styleNormal.Render(name)))
+			}
+		}
+
+		// 非表示セクション
+		if hidden := m.hiddenItems(); len(hidden) > 0 {
+			headerAbsPos := len(m.cfg.Projects)
+			if headerAbsPos >= m.listScroll && len(lines) < visibleH {
+				arrow := "▶"
+				if m.showHidden {
+					arrow = "▼"
+				}
+				headerText := fmt.Sprintf("%s 非表示 (%d)", arrow, len(hidden))
+				if m.cursor == headerAbsPos {
+					lines = append(lines, styleSelectedItem.Width(innerW).Render(headerText))
+				} else {
+					lines = append(lines, styleDimBold.Render(headerText))
+				}
+			}
+
+			if m.showHidden {
+				for hi, p := range hidden {
+					absPos := len(m.cfg.Projects) + 1 + hi
+					if absPos < m.listScroll {
+						continue
+					}
+					if len(lines) >= visibleH {
+						break
+					}
+					name := p.Name
+					if len(name) > nameW {
+						name = name[:nameW-1] + "…"
+					}
+					if m.cursor == absPos {
+						lines = append(lines, styleSelectedItem.Width(innerW).Render(
+							fmt.Sprintf("   %-*s ", nameW, name),
+						))
+					} else {
+						lines = append(lines, fmt.Sprintf("   %-*s ", nameW, styleDim.Render(name)))
+					}
+				}
 			}
 		}
 	}
