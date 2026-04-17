@@ -306,16 +306,16 @@
 <!-- ===== Hero ===== -->
 <section id="hero">
   <div class="container">
-    <div class="hero-eyebrow">// tmux session manager</div>
+    <div class="hero-eyebrow">// terminal project manager</div>
     <h1 class="hero-title">
-      tmuxのコマンドを覚えなくても、<br>
-      <span class="hl">tmuxを使いこなせる。</span>
+      再起動のたびに同じ環境を<br>
+      <span class="hl">作り直すのを、やめよう。</span>
     </h1>
     <p class="hero-sub">
-      <code>tmux new-session -s myproject</code> や <code>tmux attach-session -t myproject</code>——<br>
-      そんなコマンドを毎回調べていませんか？<br>
-      muxflow は、lazygit が git を直感的にしたように、<br>
-      tmux をキーボード操作だけで扱える TUI ツールです。
+      ターミナルのレイアウト、起動コマンド、AI エージェントの起動——<br>
+      毎回同じことを繰り返していませんか？<br>
+      muxflow はプロジェクトごとの起動手順を記録して、<br>
+      次回から <kbd>Enter</kbd> 1回で再現する<strong style="color:var(--fg)">ターミナルのプロジェクト管理ツール</strong>です。
     </p>
     <div class="hero-ctas">
       <a class="btn btn-primary" href="#install">インストールする</a>
@@ -362,26 +362,32 @@
 <section id="problem">
   <div class="container">
     <div class="s-label">// the problem</div>
-    <h2 class="s-title">tmux は強力だけど、面倒が多い。</h2>
+    <h2 class="s-title">開発を始めるまでに、やることが多すぎる。</h2>
     <div class="prob-grid">
       <div class="prob-card">
-        <div class="prob-comment">// 作業中断</div>
-        <div class="prob-code">tmux new-session -s myapp
-tmux attach-session -t ...</div>
-        <p class="prob-text">セッション名とコマンド構文を毎回調べる。作業の流れが途切れる。</p>
+        <div class="prob-comment">// 毎回同じ環境を手動で再構築</div>
+        <div class="prob-code">tmux split-window -h
+tmux send-keys "npm run dev"
+tmux split-window -v
+tmux send-keys "docker compose up"</div>
+        <p class="prob-text">再起動のたびに、同じペイン分割と同じコマンドを繰り返す。頭の中では作業がはじまっているのに。</p>
       </div>
       <div class="prob-card">
-        <div class="prob-comment">// 環境の再構築</div>
-        <div class="prob-code">// 毎回手動でウィンドウ分割
-// docker compose up...
-// npm run dev...</div>
-        <p class="prob-text">フロント・バックエンドのペイン分割を、起動のたびにやり直す。</p>
+        <div class="prob-comment">// AI エージェントの起動も増えた</div>
+        <div class="prob-code">claude --project myapp
+# + MCP サーバーの起動
+# + コンテキストの再設定
+# まだ作業ゼロ...</div>
+        <p class="prob-text">AI エージェント時代になって、プロジェクト開始前にやることがさらに増えた。</p>
       </div>
       <div class="prob-card">
-        <div class="prob-comment">// 再起動で消える</div>
+        <div class="prob-comment">// 複数プロジェクトの把握</div>
         <div class="prob-code">$ tmux ls
-no server running on ...</div>
-        <p class="prob-text">PC を再起動するとすべてのセッションが消える。また一から。</p>
+proj-a: 2 windows
+proj-b: 1 window (detached)
+temp-1: 1 window
+what-was-this: 1 window</div>
+        <p class="prob-text">並行開発が増えるほど、どのセッションがどのプロジェクトか把握できなくなる。</p>
       </div>
     </div>
   </div>
@@ -391,22 +397,22 @@ no server running on ...</div>
 <section id="features">
   <div class="container">
     <div class="s-label">// how muxflow helps</div>
-    <h2 class="s-title">3つの問題を、キーボードだけで解決する。</h2>
+    <h2 class="s-title">プロジェクトの起動を、一度だけ設定する。</h2>
 
     <!-- Feature 1 -->
     <div class="feat-block">
       <div>
         <div class="feat-num">01</div>
-        <h3 class="feat-title">Git リポジトリを自動スキャン。<br>Enter 1回で起動。</h3>
+        <h3 class="feat-title">プロジェクト一覧から<br>起動・切り替え・管理。</h3>
         <p class="feat-desc">
-          <kbd>s</kbd> キーを押すだけで指定ディレクトリ配下の Git リポジトリを自動検出。<br>
-          一覧に追加したら、あとは <kbd>Enter</kbd> を押すだけでセッションが起動してアタッチされます。<br>
-          コマンドを調べる必要は、もうありません。
+          Git リポジトリを自動スキャンして一覧化。<br>
+          どのプロジェクトが今動いているか一目で把握でき、<kbd>Enter</kbd> 1回で起動・アタッチ・切り替えができます。<br>
+          複数プロジェクトを並行開発しているときのプロジェクト管理がシンプルになります。
         </p>
-        <div class="feat-keys"><kbd>s</kbd> スキャン &nbsp;→&nbsp; <kbd>Space</kbd> 選択 &nbsp;→&nbsp; <kbd>Enter</kbd> 登録・起動</div>
+        <div class="feat-keys"><kbd>s</kbd> スキャン &nbsp;→&nbsp; <kbd>Space</kbd> 選択 &nbsp;→&nbsp; <kbd>Enter</kbd> 起動</div>
       </div>
-      <!-- GIF placeholder: スキャン → 選択 → 起動 -->
-      <div class="gif-ph" id="gif-scan" data-gif="assets/demo-scan.gif" data-alt="プロジェクトスキャンデモ">
+      <!-- GIF placeholder: プロジェクト一覧 → Enter で起動・切り替え -->
+      <div class="gif-ph" id="gif-scan" data-gif="assets/demo-scan.gif" data-alt="プロジェクト管理デモ">
         <span class="ph-label">▶  demo-scan.gif</span>
         <span class="ph-hint">// GIF がここに入ります</span>
       </div>
@@ -416,16 +422,15 @@ no server running on ...</div>
     <div class="feat-block rev">
       <div>
         <div class="feat-num">02</div>
-        <h3 class="feat-title">コマンドを登録して、<br>毎回同じ環境を再現。</h3>
+        <h3 class="feat-title">レイアウトとコマンドを登録して、<br>毎回 Enter だけ。</h3>
         <p class="feat-desc">
-          <kbd>e</kbd> キーでエディタを開き、ウィンドウ・ペイン構成と起動コマンドを登録。<br>
-          <code>docker compose up</code> や <code>npm run dev</code> を登録しておけば、<br>
-          次回から <kbd>Enter</kbd> 1回でフロント・バック同時に起動します。<br>
-          「このプロジェクトの起動コマンドなんだっけ？」は過去の話。
+          ウィンドウ分割・ペイン構成・起動コマンドをプロジェクトごとに登録。<br>
+          <code>docker compose up</code>、<code>npm run dev</code>、AI エージェントの起動コマンドもまとめて設定できます。<br>
+          次回から <kbd>Enter</kbd> 1回で、全部が同時に立ち上がります。
         </p>
         <div class="feat-keys"><kbd>e</kbd> エディタを開く &nbsp;→&nbsp; コマンド登録 &nbsp;→&nbsp; <kbd>w</kbd> 保存</div>
       </div>
-      <!-- GIF placeholder: エディタでコマンド登録 → マルチペイン起動 -->
+      <!-- GIF placeholder: エディタでコマンド登録 → Enter でマルチペイン起動 -->
       <div class="gif-ph" id="gif-editor" data-gif="assets/demo-editor.gif" data-alt="エディタ画面デモ">
         <span class="ph-label">▶  demo-editor.gif</span>
         <span class="ph-hint">// GIF がここに入ります</span>
@@ -439,7 +444,8 @@ no server running on ...</div>
         <h3 class="feat-title"><span style="color:var(--yellow)">★</span> マークで、<br>再起動後も即座に復旧。</h3>
         <p class="feat-desc">
           <kbd>a</kbd> キーでプロジェクトに <span style="color:var(--yellow)">★</span> を付けておくと、tmux セッションがゼロの状態で起動したとき自動で一括起動します。<br>
-          朝 PC を開いたら <kbd>A</kbd> を押すだけで、昨日の続きから再開できます。
+          PC を再起動しても、<kbd>A</kbd> を押すだけでレイアウトもコマンドも全部戻ってくる。<br>
+          「環境を再構築する時間」が、まるごとなくなります。
         </p>
         <div class="feat-keys"><kbd>a</kbd> 自動起動フラグ &nbsp;→&nbsp; <kbd>A</kbd> 一括起動</div>
       </div>
