@@ -32,8 +32,14 @@
       ]
     }
   ],
+  "hidden_projects": [
+    {
+      "name": "old-project",
+      "path": "/home/user/work/old-project"
+    }
+  ],
   "skipped_paths": [
-    "/home/user/work/old-project"
+    "/home/user/work/archived"
   ],
   "settings": {
     "scan_directory": "/home/user/work"
@@ -51,10 +57,15 @@
 | `description` | string | 説明文（省略可） |
 | `windows` | array | ウィンドウ・ペイン構成 |
 
-### スキップ済みパス
+### 非表示プロジェクト
 
-`skipped_paths` にはスキャン画面で `x` キーによりスキップしたプロジェクトのフルパスが保存されます。  
-一覧に表示したい場合は該当パスを削除するか、スキャン画面のスキップ済みセクションから `x` で解除できます。
+`hidden_projects` にはメイン画面で `X` キーにより非表示にしたプロジェクトが保存されます。  
+リスト末尾の `▶ 非表示 (N)` セクションから確認でき、`X` キーで通常リストに復元できます。
+
+### スキップ済みパス（レガシー）
+
+`skipped_paths` は以前のバージョンとの互換性のために残されています。新規エントリは追加されません。  
+ここに記録されたパスは非表示セクションに表示され、`X` キーで復元できます。
 
 ---
 
