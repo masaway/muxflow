@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -46,6 +47,9 @@ type App struct {
 	pendingAttach string
 	initialLoad   bool
 
+	sortActiveFirst   bool
+	originalProjects []config.Project // ソート前の順序を保持
+
 	detailScroll int
 	listScroll   int
 
@@ -83,6 +87,55 @@ func (m *App) PendingAttach() string {
 	return m.pendingAttach
 }
 
+// applySortProjects はアクティブ優先でプロジェクトをソートする
+func (m *App) applySortProjects() {
+	if m.cfg == nil {
+		return
+	}
+	currentName := ""
+	if m.cursor < len(m.cfg.Projects) {
+		currentName = m.cfg.Projects[m.cursor].Name
+	}
+	m.originalProjects = make([]config.Project, len(m.cfg.Projects))
+	copy(m.originalProjects, m.cfg.Projects)
+	sort.SliceStable(m.cfg.Projects, func(i, j int) bool {
+		ai := m.sessions[m.cfg.Projects[i].Name]
+		aj := m.sessions[m.cfg.Projects[j].Name]
+		if ai != aj {
+			return ai
+		}
+		if m.cfg.Projects[i].AutoStart != m.cfg.Projects[j].AutoStart {
+			return m.cfg.Projects[i].AutoStart
+		}
+		return m.cfg.Projects[i].Name < m.cfg.Projects[j].Name
+	})
+	for i, p := range m.cfg.Projects {
+		if p.Name == currentName {
+			m.cursor = i
+			break
+		}
+	}
+}
+
+// restoreProjectOrder は元の順序に戻す
+func (m *App) restoreProjectOrder() {
+	if m.cfg == nil || m.originalProjects == nil {
+		return
+	}
+	currentName := ""
+	if m.cursor < len(m.cfg.Projects) {
+		currentName = m.cfg.Projects[m.cursor].Name
+	}
+	m.cfg.Projects = m.originalProjects
+	m.originalProjects = nil
+	for i, p := range m.cfg.Projects {
+		if p.Name == currentName {
+			m.cursor = i
+			break
+		}
+	}
+}
+
 // ─── メッセージ ───────────────────────────────────────────────────────────────
 
 type reloadedMsg struct {
@@ -106,6 +159,9 @@ type sessionRestartedMsg struct {
 	err  error
 }
 
+type switchClientMsg struct {
+	err error
+}
 
 type windowSyncChoice struct {
 	projectName  string
@@ -226,6 +282,12 @@ func commitSyncCmd(cfg *config.Config, sessions map[string]bool) tea.Cmd {
 	}
 }
 
+func switchClientCmd(name string) tea.Cmd {
+	return func() tea.Msg {
+		return switchClientMsg{err: tmux.SwitchClient(name)}
+	}
+}
+
 func startSessionCmd(p config.Project, kill bool) tea.Cmd {
 	return func() tea.Msg {
 		created, err := tmux.CreateSession(&p, kill)
@@ -342,8 +404,12 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case reloadedMsg:
 		m.cfg = msg.cfg
 		m.sessions = msg.sessions
+		m.originalProjects = nil
 		if m.cfg != nil && m.cursor >= len(m.cfg.Projects) {
 			m.cursor = max(0, len(m.cfg.Projects)-1)
+		}
+		if m.sortActiveFirst {
+			m.applySortProjects()
 		}
 		if m.status == "更新中..." {
 			m.status = ""
@@ -393,8 +459,17 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusIsErr = false
 			return m, reloadCmd
 		} else {
+			if tmux.IsInsideTmux() {
+				return m, switchClientCmd(msg.name)
+			}
 			m.pendingAttach = msg.name
 			return m, tea.Quit
+		}
+
+	case switchClientMsg:
+		if msg.err != nil {
+			m.status = fmt.Sprintf("エラー: %s", msg.err)
+			m.statusIsErr = true
 		}
 
 	case sessionKilledMsg:
@@ -510,6 +585,9 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		p := m.cfg.Projects[m.cursor]
 		if m.sessions[p.Name] {
+			if tmux.IsInsideTmux() {
+				return m, switchClientCmd(p.Name)
+			}
 			m.pendingAttach = p.Name
 			return m, tea.Quit
 		}
@@ -575,6 +653,21 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusIsErr = false
 		}
 
+	case "o":
+		if m.cfg == nil {
+			break
+		}
+		m.sortActiveFirst = !m.sortActiveFirst
+		if m.sortActiveFirst {
+			m.applySortProjects()
+			m.status = "ソート: アクティブ優先"
+		} else {
+			m.restoreProjectOrder()
+			m.status = "ソート: 登録順"
+		}
+		m.statusIsErr = false
+		m.listScroll = 0
+
 	case "A":
 		if m.cfg == nil {
 			break
@@ -600,6 +693,7 @@ func (m *App) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		p := m.cfg.Projects[m.cursor]
 		m.cfg.Projects = append(m.cfg.Projects[:m.cursor], m.cfg.Projects[m.cursor+1:]...)
+		m.cfg.HiddenProjects = append(m.cfg.HiddenProjects, p)
 		m.cfg.SkippedPaths = append(m.cfg.SkippedPaths, p.Path)
 		if m.cursor >= len(m.cfg.Projects) && m.cursor > 0 {
 			m.cursor--

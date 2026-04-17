@@ -52,9 +52,10 @@ type Settings struct {
 
 // Config は設定ファイル全体
 type Config struct {
-	Projects     []Project `json:"projects"`
-	SkippedPaths []string  `json:"skipped_paths,omitempty"`
-	Settings     Settings  `json:"settings"`
+	Projects       []Project `json:"projects"`
+	HiddenProjects []Project `json:"hidden_projects,omitempty"`
+	SkippedPaths   []string  `json:"skipped_paths,omitempty"`
+	Settings       Settings  `json:"settings"`
 }
 
 func (p *Project) HasWindows() bool {
@@ -71,7 +72,7 @@ func (p *Project) MigrateFromCommands() {
 		panes = append(panes, Pane{Dir: ".", Command: p.Commands.Dev})
 	}
 	w := Window{
-		Name:   "dev",
+		Name:   "main",
 		Layout: "even-horizontal",
 		Panes:  panes,
 	}
