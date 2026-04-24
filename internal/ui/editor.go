@@ -1043,10 +1043,11 @@ func (m *EditorModel) renderPaneFormBox() string {
 	if f.focus == 1 {
 		cmdLabel = lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("Command ")
 	}
-	sb.WriteString(cmdLabel + "  " + f.cmd.View() + "\n")
+	sb.WriteString(cmdLabel + "\n")
+	sb.WriteString(f.cmd.View() + "\n")
 	// 複数行のとき実行時プレビューを表示
 	if joined := commandOneLine(f.cmd.Value()); strings.Contains(f.cmd.Value(), "\n") && joined != "" {
-		sb.WriteString("          " + styleDim.Render("→ "+joined) + "\n")
+		sb.WriteString(styleDim.Render("→ "+joined) + "\n")
 	}
 	sb.WriteString("\n")
 
