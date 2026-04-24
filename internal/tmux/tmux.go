@@ -84,7 +84,7 @@ var shellProcesses = map[string]bool{
 
 // ListActiveProcesses はセッション内で実行中のプロセス名一覧を返す（シェルを除く）
 func ListActiveProcesses(sessionName string) ([]string, error) {
-	code, out := runCmd("list-panes", "-t", sessionName, "-a", "-F", "#{pane_current_command}")
+	code, out := runCmd("list-panes", "-t", sessionName, "-s", "-F", "#{pane_current_command}")
 	if code != 0 {
 		return nil, fmt.Errorf("list-panes failed")
 	}
