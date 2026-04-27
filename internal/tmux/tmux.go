@@ -163,7 +163,7 @@ func CreateSession(project *config.Project, killExisting bool) (bool, error) {
 		}
 
 		if firstWindow {
-			runCmd("new-session", "-d", "-s", name, "-c", path, "-n", window.Name)
+			runCmd("new-session", "-d", "-s", name, "-c", firstPaneDir, "-n", window.Name)
 			firstWindow = false
 		} else {
 			runCmd("new-window", "-t", name, "-n", window.Name, "-c", firstPaneDir)
@@ -180,12 +180,6 @@ func CreateSession(project *config.Project, killExisting bool) (bool, error) {
 			}
 
 			paneTarget := fmt.Sprintf("%s.%d", winTarget, paneIdx)
-
-			// new-session で作られた pane 0 はプロジェクトルートで始まるため、
-			// 指定ディレクトリが異なる場合は cd で移動する
-			if paneIdx == 0 && winIdx == 0 && paneDir != path {
-				runCmd("send-keys", "-t", paneTarget, "cd "+shellQuote(paneDir), "Enter")
-			}
 
 			if pane.Command != "" {
 				cmd := joinCommand(pane.Command)
