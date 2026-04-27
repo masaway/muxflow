@@ -2,10 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"runtime"
+	"strings"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/creativeprojects/go-selfupdate"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -16,22 +21,79 @@ import (
 
 var version = "dev"
 
+type githubRelease struct {
+	TagName string `json:"tag_name"`
+	Assets  []struct {
+		Name               string `json:"name"`
+		BrowserDownloadURL string `json:"browser_download_url"`
+	} `json:"assets"`
+}
+
+func fetchLatestRelease() (*githubRelease, error) {
+	req, err := http.NewRequest("GET", "https://api.github.com/repos/masaway/muxflow/releases/latest", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned %d", resp.StatusCode)
+	}
+	var rel githubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+		return nil, err
+	}
+	return &rel, nil
+}
+
+func findAsset(rel *githubRelease) (url, name string, found bool) {
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+	for _, a := range rel.Assets {
+		lower := strings.ToLower(a.Name)
+		if strings.Contains(lower, goos) && strings.Contains(lower, goarch) {
+			return a.BrowserDownloadURL, a.Name, true
+		}
+	}
+	return "", "", false
+}
+
 func selfUpdate() {
 	if version == "dev" {
 		fmt.Println("開発ビルドのため更新をスキップします。")
 		return
 	}
 	fmt.Println("最新バージョンを確認中...")
-	latest, found, err := selfupdate.DetectLatest(context.Background(), selfupdate.ParseSlug("masaway/muxflow"))
+	rel, err := fetchLatestRelease()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "バージョン確認エラー:", err)
 		os.Exit(1)
 	}
-	if !found || latest.LessOrEqual(version) {
+	latestTag := strings.TrimPrefix(rel.TagName, "v")
+	latestVer, err := semver.NewVersion(latestTag)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "バージョン解析エラー:", err)
+		os.Exit(1)
+	}
+	currentVer, err := semver.NewVersion(version)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "現在バージョン解析エラー:", err)
+		os.Exit(1)
+	}
+	if !latestVer.GreaterThan(currentVer) {
 		fmt.Println("すでに最新バージョンです:", version)
 		return
 	}
-	fmt.Printf("新しいバージョンが見つかりました: %s → %s\n", version, latest.Version())
+	assetURL, assetName, found := findAsset(rel)
+	if !found {
+		fmt.Fprintln(os.Stderr, "このプラットフォーム向けのアセットが見つかりません")
+		os.Exit(1)
+	}
+	fmt.Printf("新しいバージョンが見つかりました: %s → %s\n", version, latestTag)
 	fmt.Print("更新しますか？ [y/N]: ")
 	var input string
 	fmt.Scanln(&input)
@@ -44,11 +106,11 @@ func selfUpdate() {
 		fmt.Fprintln(os.Stderr, "実行ファイルパス取得エラー:", err)
 		os.Exit(1)
 	}
-	if err := selfupdate.UpdateTo(context.Background(), latest.AssetURL, latest.AssetName, exe); err != nil {
+	if err := selfupdate.UpdateTo(context.Background(), assetURL, assetName, exe); err != nil {
 		fmt.Fprintln(os.Stderr, "更新エラー:", err)
 		os.Exit(1)
 	}
-	fmt.Printf("更新完了: %s\n", latest.Version())
+	fmt.Printf("更新完了: %s\n", latestTag)
 }
 
 func main() {
